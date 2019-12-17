@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from dice_loss import dice_coeff
-
+from losses_pytorch import dice_loss as losses
 
 def eval_net(net, loader, device, n_val):
     """Evaluation without the densecrf with the dice coefficient"""
@@ -22,8 +22,8 @@ def eval_net(net, loader, device, n_val):
 
             for true_mask, pred in zip(true_masks, mask_pred):
                 pred = (pred > 0.5).float()
-                if net.n_classes > 1:
-                    tot += F.cross_entropy(pred.unsqueeze(dim=0), true_mask.unsqueeze(dim=0)).item()
+                if net.module.n_classes > 1:
+                    tot += losses.dice_coeff(pred, true_mask)
                 else:
                     tot += dice_coeff(pred, true_mask.squeeze(dim=1)).item()
             pbar.update(imgs.shape[0])
