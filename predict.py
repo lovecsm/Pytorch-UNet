@@ -12,6 +12,7 @@ from unet import UNet
 from utils.data_vis import plot_img_and_mask
 from utils.dataset import BasicDataset
 from utils.crf import dense_crf
+import cv2 as cv
 
 
 def predict_img(net,
@@ -23,7 +24,7 @@ def predict_img(net,
     net.eval()
 
     ds = BasicDataset('', '', scale=scale_factor)
-    img = ds.preprocess(full_img)
+    img = torch.from_numpy(ds.preprocess(full_img))
 
     img = img.unsqueeze(0)
     img = img.to(device=device, dtype=torch.float32)
@@ -31,7 +32,7 @@ def predict_img(net,
     with torch.no_grad():
         output = net(img)
 
-        if net.n_classes > 1:
+        if net.module.n_classes > 1:
             probs = F.softmax(output, dim=1)
         else:
             probs = torch.sigmoid(output)
@@ -41,7 +42,7 @@ def predict_img(net,
         tf = transforms.Compose(
             [
                 transforms.ToPILImage(),
-                transforms.Resize(full_img.shape[1]),
+                transforms.Resize(np.array(full_img).shape[1]),
                 transforms.ToTensor()
             ]
         )
@@ -52,7 +53,9 @@ def predict_img(net,
     if use_dense_crf:
         full_mask = dense_crf(np.array(full_img).astype(np.uint8), full_mask)
 
-    return full_mask > out_threshold
+    full_mask[full_mask > out_threshold] = 1.0
+    full_mask[full_mask <= out_threshold] = 0.0
+    return full_mask
 
 
 def get_args():
@@ -100,7 +103,18 @@ def get_output_filenames(args):
 
 
 def mask_to_image(mask):
-    return Image.fromarray((mask * 255).astype(np.uint8))
+    w, h = mask.shape[1:]
+    mask = mask[:, :][1:]
+    n_img = np.zeros((3, w, h))
+    n_img[:, :, 0] = mask[:, :, 0] * 100
+    n_img[:, :, 1] = mask[:, :, 1] * 180
+    n_img[:, :, 2] = mask[:, :, 2] * 255
+    cv.imshow('test.png', n_img.transpose(1, 2, 0))
+    cv.waitKey(-1)
+
+    n_img = n_img.transpose(1, 2, 0)
+    return Image.fromarray(n_img.astype(np.uint8))
+    # print(mask.shape)
 
 
 if __name__ == "__main__":
@@ -108,12 +122,13 @@ if __name__ == "__main__":
     in_files = args.input
     out_files = get_output_filenames(args)
 
-    net = UNet(n_channels=3, n_classes=1)
+    net = UNet(n_channels=1, n_classes=4)
 
     logging.info("Loading model {}".format(args.model))
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logging.info(f'Using device {device}')
+    net = torch.nn.DataParallel(net)
     net.to(device=device)
     net.load_state_dict(torch.load(args.model, map_location=device))
 
