@@ -29,6 +29,10 @@ def predict_img(net,
     img = img.unsqueeze(0)
     img = img.to(device=device, dtype=torch.float32)
 
+    traced_script_module = torch.jit.trace(net.module, img)
+    # 保存模型
+    traced_script_module.save("torch_script_eval.pt")
+
     with torch.no_grad():
         output = net(img)
 
@@ -103,17 +107,11 @@ def get_output_filenames(args):
 
 
 def mask_to_image(mask):
-    w, h = mask.shape[1:]
-    mask = mask[:, :][1:]
-    n_img = np.zeros((3, w, h))
-    n_img[:, :, 0] = mask[:, :, 0] * 100
-    n_img[:, :, 1] = mask[:, :, 1] * 180
-    n_img[:, :, 2] = mask[:, :, 2] * 255
-    cv.imshow('test.png', n_img.transpose(1, 2, 0))
-    cv.waitKey(-1)
+    n_mask = mask * 100
+    # cv.imshow('test.png', n_mask)
+    # cv.waitKey(3)
 
-    n_img = n_img.transpose(1, 2, 0)
-    return Image.fromarray(n_img.astype(np.uint8))
+    return Image.fromarray(n_mask.astype(np.uint8))
     # print(mask.shape)
 
 
@@ -122,7 +120,7 @@ if __name__ == "__main__":
     in_files = args.input
     out_files = get_output_filenames(args)
 
-    net = UNet(n_channels=1, n_classes=4)
+    net = UNet(n_channels=1, n_classes=1)
 
     logging.info("Loading model {}".format(args.model))
 

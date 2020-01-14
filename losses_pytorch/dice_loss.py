@@ -102,15 +102,15 @@ class MyDiceClass(nn.Module):
         num = targets.size(0)
         smooth = 1e-5
 
-        probs = torch.sigmoid(logits)
-        m1 = probs.view(num, -1)
+        # probs = torch.sigmoid(logits)
+        m1 = logits.view(num, -1)
         m2 = targets.view(num, -1)
         intersection = (m1 * m2)
 
         score = 2. * (intersection.sum(1) + smooth) / (m1.sum(1) + m2.sum(1) + smooth)
-        score = 1 - score.sum() / num
+        average_score = (score.sum() / num)
+        score = (average_score - 1) if average_score > 1 else (1 - average_score)
         return score
-
 
 
 if __name__ == '__main__':

@@ -17,9 +17,9 @@ from utils.dataset import BasicDataset
 from losses_pytorch import dice_loss as losses
 
 dir_train_img = 'data/trainimage/'
-dir_train_mask = 'data/trainlabel/train_multi/'
+dir_train_mask = 'data/trainlabel/train_single/'
 dir_val_img = 'data/validimage/'
-dir_val_mask = 'data/validlabel/val_multi/'
+dir_val_mask = 'data/validlabel/val_single/'
 dir_checkpoint = 'checkpoints/'
 
 
@@ -33,7 +33,7 @@ def train_net(net,
               img_scale=0.5):
 
     train_dataset = BasicDataset(dir_train_img, dir_train_mask, img_scale)
-    val_dataset= BasicDataset(dir_val_img, dir_val_mask, img_scale)
+    val_dataset = BasicDataset(dir_val_img, dir_val_mask, img_scale)
     n_val = len(val_dataset)
     n_train = len(train_dataset)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=8, pin_memory=True)
@@ -55,13 +55,13 @@ def train_net(net,
 
     optimizer = optim.Adam(net.module.parameters(), lr=lr, weight_decay=1e-8)
 
-    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.98, last_epoch=-1)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.98, last_epoch=-1)
 
     if net.module.n_classes > 1:
-        criterion = losses.MyDiceClass()
+        # criterion = losses.MyDiceClass()
+        criterion = nn.CrossEntropyLoss()
     else:
-        # criterion = nn.BCEWithLogitsLoss()
-        criterion = losses.MyDiceClass()
+        criterion = nn.BCEWithLogitsLoss()
 
     for epoch in range(epochs):
         net.train()
@@ -119,7 +119,7 @@ def train_net(net,
                 logging.info('Created checkpoint directory')
             except OSError:
                 pass
-            torch.save(net.module.state_dict(),
+            torch.save(net.state_dict(),
                        dir_checkpoint + f'CP_epoch{epoch + 1}.pth')
             logging.info(f'Checkpoint {epoch + 1} saved !')
 
@@ -157,7 +157,7 @@ if __name__ == '__main__':
     #   - For 1 class and background, use n_classes=1
     #   - For 2 classes, use n_classes=1
     #   - For N > 2 classes, use n_classes=N
-    net = UNet(n_channels=1, n_classes=4)
+    net = UNet(n_channels=1, n_classes=1)
     logging.info(f'Network:\n'
                  f'\t{net.n_channels} input channels\n'
                  f'\t{net.n_classes} output channels (classes)\n'
@@ -174,18 +174,18 @@ if __name__ == '__main__':
     # faster convolutions, but more memory
     # cudnn.benchmark = True
 
-try:
-    train_net(net=net,
-              epochs=args.epochs,
-              batch_size=args.batchsize,
-              lr=args.lr,
-              device=device,
-              img_scale=args.scale,
-              val_percent=args.val / 100)
-except KeyboardInterrupt:
-    torch.save(net.module.state_dict(), 'INTERRUPTED.pth')
-    logging.info('Saved interrupt')
     try:
-        sys.exit(0)
-    except SystemExit:
-        os._exit(0)
+        train_net(net=net,
+                  epochs=args.epochs,
+                  batch_size=args.batchsize,
+                  lr=args.lr,
+                  device=device,
+                  img_scale=args.scale,
+                  val_percent=args.val / 100)
+    except KeyboardInterrupt:
+        torch.save(net.module.state_dict(), 'INTERRUPTED.pth')
+        logging.info('Saved interrupt')
+        try:
+            sys.exit(0)
+        except SystemExit:
+            os._exit(0)

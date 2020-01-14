@@ -36,6 +36,7 @@ class BasicDataset(Dataset):
 
         # HWC to CHW
         img_trans = img_nd.transpose((2, 0, 1))
+        # normalize gray to [0, 1]
         if img_trans.max() > 1:
             img_trans = img_trans / 255
 
@@ -57,6 +58,8 @@ class BasicDataset(Dataset):
             f'Image and mask {idx} should be the same size, but are {img.size} and {mask.size}'
 
         img = self.preprocess(img)
-        mask = self.preprocess(mask)
+        mask = np.array(mask)
+        mask[mask > 1] = 0
+        mask = self.preprocess(Image.fromarray(mask))
 
         return {'image': torch.from_numpy(img), 'mask': torch.from_numpy(mask)}
