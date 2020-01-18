@@ -6,6 +6,17 @@ import torch
 from torch.utils.data import Dataset
 import logging
 from PIL import Image
+from albumentations import (
+    Compose,
+    ElasticTransform,
+    GridDistortion,
+    OneOf,
+    CLAHE,
+    RandomBrightnessContrast,
+    RandomGamma,
+    Rotate,
+    RandomScale
+)
 
 
 class BasicDataset(Dataset):
@@ -80,6 +91,21 @@ class BasicDataset(Dataset):
             f'Either no image or multiple images found for the ID {idx}: {img_file}'
         mask = Image.open(mask_file[0])
         img = Image.open(img_file[0])
+
+        # random image augmentation
+        aug = Compose([
+            OneOf([
+                ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+                GridDistortion(p=0.5),
+                RandomGamma(gamma_limit=(50, 130), p=0.5),
+                CLAHE(clip_limit=2.0, p=0.5),
+                RandomBrightnessContrast(brightness_limit=0.4, p=0.5),
+                Rotate(limit=20),
+                RandomScale(scale_limit=0.2)
+            ], p=0.8)])
+        augmented = aug(image=img, mask=mask)
+        img = augmented['image']
+        mask = augmented['mask']
 
         assert img.size == mask.size, \
             f'Image and mask {idx} should be the same size, but are {img.size} and {mask.size}'
