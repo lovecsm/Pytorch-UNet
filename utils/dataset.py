@@ -54,6 +54,7 @@ class BasicDataset(Dataset):
         img_nd = np.array(pil_img).astype('float32')
         # one-hot coding
         img_res = np.zeros((newH, newW, 4))
+        img_res[:, :, 0] = 1
         img_res[:, :, 1] = np.where(img_nd == 1, 1, 0)
         img_res[:, :, 2] = np.where(img_nd == 2, 1, 0)
         img_res[:, :, 3] = np.where(img_nd == 3, 1, 0)

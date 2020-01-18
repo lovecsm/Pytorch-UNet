@@ -11,7 +11,6 @@ import torch.nn.functional as F
 from unet import UNet
 from utils.data_vis import plot_img_and_mask
 from utils.dataset import BasicDataset
-from utils.crf import dense_crf
 import cv2 as cv
 
 
@@ -30,9 +29,9 @@ def predict_img(net,
     print('30 img', img.shape)
     img = img.to(device=device, dtype=torch.float32)
 
-    traced_script_module = torch.jit.trace(net, img)
+    # traced_script_module = torch.jit.trace(net, img)
     # 保存模型
-    traced_script_module.save("torch_script_eval.pth")
+    # traced_script_module.save("torch_script_eval.pth")
 
     with torch.no_grad():
         print('38 input into net', img.shape)
@@ -58,11 +57,17 @@ def predict_img(net,
         probs = tf(probs.cpu())
         full_mask = probs.squeeze().cpu().numpy()
 
-    if use_dense_crf:
-        full_mask = dense_crf(np.array(full_img).astype(np.uint8), full_mask)
+    # if use_dense_crf:
+    #     full_mask = dense_crf(np.array(full_img).astype(np.uint8), full_mask)
 
-    full_mask[full_mask > out_threshold] = 1.0
-    full_mask[full_mask <= out_threshold] = 0.0
+    full_mask[0][full_mask[0] > out_threshold] = 1.0
+    full_mask[0][full_mask[0] <= out_threshold] = 0.0
+    full_mask[1][full_mask[1] > out_threshold] = 1.0
+    full_mask[1][full_mask[1] <= out_threshold] = 0.0
+    full_mask[2][full_mask[2] > out_threshold] = 1.0
+    full_mask[2][full_mask[2] <= out_threshold] = 0.0
+    full_mask[3][full_mask[3] > out_threshold] = 1.0
+    full_mask[3][full_mask[3] <= out_threshold] = 0.0
     return full_mask
 
 
@@ -112,11 +117,15 @@ def get_output_filenames(args):
 
 def mask_to_image(mask):
     n_mask = np.array(mask * 20)
-    n_mask = n_mask.sum(axis=0)
+    for channel in range(0, 4):
+        cv.imshow('prediction', n_mask[channel])
+        cv.waitKey()
+        cv.destroyAllWindows()
+    # n_mask = n_mask.sum(axis=0)
     print('116 n_mask shape', n_mask.shape)
 
-    cv.imshow('prediction', n_mask)
-    cv.waitKey()
+    # cv.imshow('prediction', n_mask)
+    # cv.waitKey()
 
     return Image.fromarray(n_mask.astype(np.uint8))
     # print(mask.shape)

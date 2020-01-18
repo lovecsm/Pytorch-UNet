@@ -31,7 +31,6 @@ def train_net(net,
               val_percent=0.1,
               save_cp=True,
               img_scale=0.5):
-
     train_dataset = BasicDataset(dir_train_img, dir_train_mask, img_scale)
     val_dataset = BasicDataset(dir_val_img, dir_val_mask, img_scale)
     n_val = len(val_dataset)
@@ -99,10 +98,10 @@ def train_net(net,
 
                 pbar.update(imgs.shape[0])
                 global_step += 1
-                if global_step % (len(train_dataset) // (10 * batch_size)) == 0:
+                if global_step % (len(train_dataset) // (10 * 64 if batch_size == 0 else 64)) == 0:
                     val_score = eval_net(net, val_loader, device, n_val)
                     if net.module.n_classes > 1:
-                        logging.info('Validation Dice Coeff: {}'.format(val_score))
+                        logging.info('Validation Cross entropyND: {}'.format(val_score))
                         writer.add_scalar('Loss/test', val_score, global_step)
 
                     else:
@@ -170,7 +169,7 @@ if __name__ == '__main__':
         )
         logging.info(f'Model loaded from {args.load}')
 
-    net = torch.nn.DataParallel(net)
+    net = torch.nn.DataParallel(net, device_ids=[0, 1, 2, 3])
     net.to(device=device)
     # faster convolutions, but more memory
     # cudnn.benchmark = True
