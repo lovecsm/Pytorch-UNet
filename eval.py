@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from dice_loss import dice_coeff
+from losses_pytorch import multi_dice, ND_Crossentropy
 
 
 def eval_net(net, loader, device, n_val):
@@ -24,7 +25,9 @@ def eval_net(net, loader, device, n_val):
             for true_mask, pred in zip(true_masks, mask_pred):
                 pred = (pred > 0.5).float()
                 if net.module.n_classes > 1:
-                    tot += F.cross_entropy(pred.unsqueeze(dim=0), true_mask.unsqueeze(dim=0)).item()
+                    tot += ND_Crossentropy.CrossentropyND().forward(pred.unsqueeze(dim=0), true_mask.unsqueeze(dim=0)).item()
+                    # tot += multi_dice.CrossEntropy2d(C=3, weight=[0.5, 0.5, 0.5]).forward(pred.unsqueeze(dim=0), true_mask.unsqueeze(dim=0))
+                    #tot += F.cross_entropy(pred.unsqueeze(dim=0), true_mask.unsqueeze(dim=0)).item()
                 else:
                     tot += dice_coeff(pred, true_mask.squeeze(dim=1)).item()
             pbar.update(imgs.shape[0])

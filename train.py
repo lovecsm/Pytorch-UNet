@@ -14,12 +14,12 @@ from eval import eval_net
 from unet import UNet
 from utils.dataset import BasicDataset
 
-from losses_pytorch import dice_loss as losses
+from losses_pytorch import focal_loss, dice_loss, multi_dice, ND_Crossentropy
 
-dir_train_img = 'data/trainimage/'
-dir_train_mask = 'data/trainlabel/train_single/'
-dir_val_img = 'data/validimage/'
-dir_val_mask = 'data/validlabel/val_single/'
+dir_train_img = 'data/trainimage4/'
+dir_train_mask = 'data/trainlabel4_2/'
+dir_val_img = 'data/validimage4/'
+dir_val_mask = 'data/validlabel4_2/'
 dir_checkpoint = 'checkpoints/'
 
 
@@ -53,13 +53,17 @@ def train_net(net,
         Images scaling:  {img_scale}
     ''')
 
-    optimizer = optim.Adam(net.module.parameters(), lr=lr, weight_decay=1e-8)
+    optimizer = optim.Adam(net.parameters(), lr=lr, weight_decay=1e-8)
 
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.98, last_epoch=-1)
 
     if net.module.n_classes > 1:
         # criterion = losses.MyDiceClass()
-        criterion = nn.CrossEntropyLoss()
+        # criterion = nn.CrossEntropyLoss()
+        # criterion = losses.GDiceLoss(apply_nonlin=losses.softmax_helper)
+        # criterion = focal_loss.FocalLoss(apply_nonlin=dice_loss.softmax_helper)
+        # criterion = multi_dice.CrossEntropy2d(C=3, weight=[0.5, 0.5, 0.5])
+        criterion = ND_Crossentropy.CrossentropyND()
     else:
         criterion = nn.BCEWithLogitsLoss()
 
@@ -76,15 +80,12 @@ def train_net(net,
                     f'but loaded images have {imgs.shape[1]} channels. Please check that ' \
                     'the images are loaded correctly.'
 
-                assert true_masks.shape[1] == net.module.n_classes, \
-                    f'Network has been defined with {net.module.n_classes} output classes, ' \
-                    f'but loaded masks have {true_masks.shape[1]} channels. Please check that ' \
-                    'the masks are loaded correctly.'
-
                 imgs = imgs.to(device=device, dtype=torch.float32)
-                true_masks = true_masks.to(device=device, dtype=torch.float32)
+                mask_type = torch.float32 if net.module.n_classes == 1 else torch.long
+                true_masks = true_masks.to(device=device, dtype=mask_type)
 
                 masks_pred = net(imgs)
+                print(true_masks.shape, masks_pred.shape)
                 loss = criterion(masks_pred, true_masks)
                 epoch_loss += loss.item()
                 writer.add_scalar('Loss/train', loss.item(), global_step)
@@ -157,7 +158,7 @@ if __name__ == '__main__':
     #   - For 1 class and background, use n_classes=1
     #   - For 2 classes, use n_classes=1
     #   - For N > 2 classes, use n_classes=N
-    net = UNet(n_channels=1, n_classes=1)
+    net = UNet(n_channels=1, n_classes=4)
     logging.info(f'Network:\n'
                  f'\t{net.n_channels} input channels\n'
                  f'\t{net.n_classes} output channels (classes)\n'
@@ -183,7 +184,7 @@ if __name__ == '__main__':
                   img_scale=args.scale,
                   val_percent=args.val / 100)
     except KeyboardInterrupt:
-        torch.save(net.module.state_dict(), 'INTERRUPTED.pth')
+        torch.save(net.state_dict(), 'INTERRUPTED.pth')
         logging.info('Saved interrupt')
         try:
             sys.exit(0)

@@ -25,16 +25,19 @@ def predict_img(net,
 
     ds = BasicDataset('', '', scale=scale_factor)
     img = torch.from_numpy(ds.preprocess(full_img))
-
+    print('28 img', img.shape)
     img = img.unsqueeze(0)
+    print('30 img', img.shape)
     img = img.to(device=device, dtype=torch.float32)
 
-    traced_script_module = torch.jit.trace(net.module, img)
+    traced_script_module = torch.jit.trace(net, img)
     # 保存模型
-    traced_script_module.save("torch_script_eval.pt")
+    traced_script_module.save("torch_script_eval.pth")
 
     with torch.no_grad():
+        print('38 input into net', img.shape)
         output = net(img)
+        print('40 output shape', output.shape)
 
         if net.module.n_classes > 1:
             probs = F.softmax(output, dim=1)
@@ -42,11 +45,12 @@ def predict_img(net,
             probs = torch.sigmoid(output)
 
         probs = probs.squeeze(0)
+        print('48 probs shape', probs.shape)
 
         tf = transforms.Compose(
             [
                 transforms.ToPILImage(),
-                transforms.Resize(np.array(full_img).shape[1]),
+                # transforms.Resize(np.array(full_img).shape[1]),
                 transforms.ToTensor()
             ]
         )
@@ -107,9 +111,12 @@ def get_output_filenames(args):
 
 
 def mask_to_image(mask):
-    n_mask = mask * 100
-    # cv.imshow('test.png', n_mask)
-    # cv.waitKey(3)
+    n_mask = np.array(mask * 20)
+    n_mask = n_mask.sum(axis=0)
+    print('116 n_mask shape', n_mask.shape)
+
+    cv.imshow('prediction', n_mask)
+    cv.waitKey()
 
     return Image.fromarray(n_mask.astype(np.uint8))
     # print(mask.shape)
@@ -120,7 +127,7 @@ if __name__ == "__main__":
     in_files = args.input
     out_files = get_output_filenames(args)
 
-    net = UNet(n_channels=1, n_classes=1)
+    net = UNet(n_channels=1, n_classes=4)
 
     logging.info("Loading model {}".format(args.model))
 
@@ -129,8 +136,12 @@ if __name__ == "__main__":
     net = torch.nn.DataParallel(net)
     net.to(device=device)
     net.load_state_dict(torch.load(args.model, map_location=device))
+    # device = torch.device('cpu')
+    # pretained_dict = torch.load(args.model)
+    # net.load_state_dict(pretained_dict)  # CPU-version
 
     logging.info("Model loaded !")
+    # torch.save(net.module, 'save_as.pth')
 
     for i, fn in enumerate(in_files):
         logging.info("\nPredicting image {} ...".format(fn))

@@ -12,29 +12,35 @@ class CrossentropyND(torch.nn.CrossEntropyLoss):
     """
     Network has to have NO NONLINEARITY!
     """
+
     def forward(self, inp, target):
-        target = target.long()
-        num_classes = inp.size()[1]
+        # target = target.long()
+        target = torch.argmax(target, 1)
+        # inp = torch.argmax(inp, 1).squeeze().to(torch.float32)
+        # num_classes = inp.size()[1]  # b, c, h, w
 
-        i0 = 1
-        i1 = 2
+        # convert b, c, h, w into b, h, w, c
+        # i0 = 1
+        # i1 = 2
 
-        while i1 < len(inp.shape): # this is ugly but torch only allows to transpose two axes at once
-            inp = inp.transpose(i0, i1)
-            i0 += 1
-            i1 += 1
+        # while i1 < len(inp.shape):  # this is ugly but torch only allows to transpose two axes at once
+        #    inp = inp.transpose(i0, i1)
+        #    i0 += 1
+        #    i1 += 1
 
-        inp = inp.contiguous()
-        inp = inp.view(-1, num_classes)
+        # inp = inp.contiguous()
+        # inp = inp.view(-1, num_classes)  # convert input into 2-D tensor, that concat 3-D tensor in Z-axis by row
 
-        target = target.view(-1,)
-
+        # target = target.view(-1, )  # flatten, that convert the target into 1-D tensor
+        # print(f'target shape is {target.shape}, input shape is {inp.shape}')
         return super(CrossentropyND, self).forward(inp, target)
+
 
 class TopKLoss(CrossentropyND):
     """
     Network has to have NO LINEARITY!
     """
+
     def __init__(self, weight=None, ignore_index=-100, k=10):
         self.k = k
         super(TopKLoss, self).__init__(weight, False, ignore_index, reduce=False)
@@ -43,7 +49,7 @@ class TopKLoss(CrossentropyND):
         target = target[:, 0].long()
         res = super(TopKLoss, self).forward(inp, target)
         num_voxels = np.prod(res.shape)
-        res, _ = torch.topk(res.view((-1, )), int(num_voxels * self.k / 100), sorted=False)
+        res, _ = torch.topk(res.view((-1,)), int(num_voxels * self.k / 100), sorted=False)
         return res.mean()
 
 
@@ -51,6 +57,7 @@ class WeightedCrossEntropyLoss(torch.nn.CrossEntropyLoss):
     """
     Network has to have NO NONLINEARITY!
     """
+
     def __init__(self, weight=None):
         super(WeightedCrossEntropyLoss, self).__init__()
         self.weight = weight
@@ -62,7 +69,7 @@ class WeightedCrossEntropyLoss(torch.nn.CrossEntropyLoss):
         i0 = 1
         i1 = 2
 
-        while i1 < len(inp.shape): # this is ugly but torch only allows to transpose two axes at once
+        while i1 < len(inp.shape):  # this is ugly but torch only allows to transpose two axes at once
             inp = inp.transpose(i0, i1)
             i0 += 1
             i1 += 1
@@ -70,10 +77,11 @@ class WeightedCrossEntropyLoss(torch.nn.CrossEntropyLoss):
         inp = inp.contiguous()
         inp = inp.view(-1, num_classes)
 
-        target = target.view(-1,)
+        target = target.view(-1, )
         wce_loss = torch.nn.CrossEntropyLoss(weight=self.weight)
 
         return wce_loss(inp, target)
+
 
 class WeightedCrossEntropyLossV2(torch.nn.Module):
     """
@@ -104,7 +112,7 @@ class WeightedCrossEntropyLossV2(torch.nn.Module):
         # class_weights = (torch.einsum("cbxyz->c", y_onehot).type(torch.float32) + 1e-10)/torch.numel(y_onehot)
         # print('class_weights', class_weights)
         # class_weights = class_weights.view(-1)
-        class_weights = torch.cuda.FloatTensor([0.2,0.8])
+        class_weights = torch.cuda.FloatTensor([0.2, 0.8])
         gt = gt.long()
         num_classes = net_output.size()[1]
         # class_weights = self._class_weights(inp)
@@ -112,17 +120,17 @@ class WeightedCrossEntropyLossV2(torch.nn.Module):
         i0 = 1
         i1 = 2
 
-        while i1 < len(net_output.shape): # this is ugly but torch only allows to transpose two axes at once
+        while i1 < len(net_output.shape):  # this is ugly but torch only allows to transpose two axes at once
             net_output = net_output.transpose(i0, i1)
             i0 += 1
             i1 += 1
 
         net_output = net_output.contiguous()
-        net_output = net_output.view(-1, num_classes) #shape=(vox_num, class_num)
+        net_output = net_output.view(-1, num_classes)  # shape=(vox_num, class_num)
 
-        gt = gt.view(-1,)
+        gt = gt.view(-1, )
         # print('*'*20)
-        return F.cross_entropy(net_output, gt) # , weight=class_weights
+        return F.cross_entropy(net_output, gt)  # , weight=class_weights
 
     # @staticmethod
     # def _class_weights(input):
@@ -133,6 +141,7 @@ class WeightedCrossEntropyLossV2(torch.nn.Module):
     #     denominator = flattened.sum(-1)
     #     class_weights = Variable(nominator / denominator, requires_grad=False)
     #     return class_weights
+
 
 def flatten(tensor):
     """Flattens a given tensor such that the channel axis is first.
@@ -148,6 +157,7 @@ def flatten(tensor):
     transposed = transposed.contiguous()
     return transposed.view(C, -1)
 
+
 def compute_edts_forPenalizedLoss(GT):
     """
     GT.shape = (batch_size, x,y,z)
@@ -159,11 +169,12 @@ def compute_edts_forPenalizedLoss(GT):
         posmask = GT[i]
         negmask = ~posmask
         pos_edt = distance_transform_edt(posmask)
-        pos_edt = (np.max(pos_edt)-pos_edt)*posmask 
-        neg_edt =  distance_transform_edt(negmask)
-        neg_edt = (np.max(neg_edt)-neg_edt)*negmask        
-        res[i] = pos_edt/np.max(pos_edt) + neg_edt/np.max(neg_edt)
+        pos_edt = (np.max(pos_edt) - pos_edt) * posmask
+        neg_edt = distance_transform_edt(negmask)
+        neg_edt = (np.max(neg_edt) - neg_edt) * negmask
+        res[i] = pos_edt / np.max(pos_edt) + neg_edt / np.max(neg_edt)
     return res
+
 
 class DisPenalizedCE(torch.nn.Module):
     """
@@ -176,12 +187,12 @@ class DisPenalizedCE(torch.nn.Module):
         # print(inp.shape, target.shape) # (batch, 2, xyz), (batch, 2, xyz)
         # compute distance map of ground truth
         with torch.no_grad():
-            dist = compute_edts_forPenalizedLoss(target.cpu().numpy()>0.5) + 1.0
-        
+            dist = compute_edts_forPenalizedLoss(target.cpu().numpy() > 0.5) + 1.0
+
         dist = torch.from_numpy(dist)
         if dist.device != inp.device:
             dist = dist.to(inp.device).type(torch.float32)
-        dist = dist.view(-1,)
+        dist = dist.view(-1, )
 
         target = target.long()
         num_classes = inp.size()[1]
@@ -189,7 +200,7 @@ class DisPenalizedCE(torch.nn.Module):
         i0 = 1
         i1 = 2
 
-        while i1 < len(inp.shape): # this is ugly but torch only allows to transpose two axes at once
+        while i1 < len(inp.shape):  # this is ugly but torch only allows to transpose two axes at once
             inp = inp.transpose(i0, i1)
             i0 += 1
             i1 += 1
@@ -199,11 +210,11 @@ class DisPenalizedCE(torch.nn.Module):
         log_sm = torch.nn.LogSoftmax(dim=1)
         inp_logs = log_sm(inp)
 
-        target = target.view(-1,)
+        target = target.view(-1, )
         # loss = nll_loss(inp_logs, target)
         loss = -inp_logs[range(target.shape[0]), target]
         # print(loss.type(), dist.type())
-        weighted_loss = loss*dist
+        weighted_loss = loss * dist
 
         return loss.mean()
 
@@ -216,5 +227,3 @@ def nll_loss(input, target):
     """
     loss = -input[range(target.shape[0]), target]
     return loss.mean()
-
-
